@@ -1,0 +1,120 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+```{r}
+# read in expenditures from the collective expenditures file
+expenditures <- read.csv("/Users/vikaba/Downloads/expends_4-2-18.csv")
+expenditures$Categories_final_edit <- tolower(expenditures$Categories_final_edit)
+
+# extract only travel expenditures
+travel <- expenditures[grepl("travel", expenditures$Categories_final_edit, fixed=TRUE),]
+
+# individual politician files with locations for each expenditure
+healeyu <- read.csv("/Users/vikaba/Downloads/healey.csv")
+bakeru <- read.csv("/Users/vikaba/Downloads/baker.csv")
+walshu <- read.csv("/Users/vikaba/Downloads/walsh.csv")
+marianou <- read.csv("/Users/vikaba/Downloads/by_pol/mariano.csv")
+pachecou <- read.csv("/Users/vikaba/Downloads/by_pol/pacheco.csv")
+deleou <- read.csv("/Users/vikaba/Downloads/by_pol/deleo.csv")
+politou <- read.csv("/Users/vikaba/Downloads/polito.csv")
+mcdonaldu <- read.csv("/Users/vikaba/Downloads/mcdonald.csv")
+rosenbergu <- read.csv("/Users/vikaba/Downloads/rosenberg.csv")
+cusacku <- read.csv("/Users/vikaba/Downloads/cusack.csv")
+
+categories <- c(as.character(healeyu$Category), as.character(bakeru$Category), as.character(walshu$Category), as.character(marianou$Category), as.character(pachecou$Category), as.character(deleou$Category), as.character(politou$Category), as.character(mcdonaldu$Category), as.character(rosenbergu$Category), as.character(cusacku$Category))
+summary(as.factor(categories))
+```
+
+
+```{r}
+# remove $ signs, commas, empty spaces, and parantheses from the amount feature
+clean <- function(politician) {
+  politician$Amount <- gsub("$", "", as.character(politician$Amount), fixed = TRUE)
+  politician$Amount <- gsub(",", "", politician$Amount, fixed = TRUE)
+  politician$Amount <- gsub("(", "", politician$Amount, fixed = TRUE)
+  politician$Amount <- gsub(")", "", politician$Amount, fixed = TRUE)
+  politician$Amount <- as.numeric(gsub(" ", "", politician$Amount, fixed = TRUE))
+  return(politician)
+}
+
+# remove $ signs, commas, empty spaces, and parantheses from the amount feature from all of the politician files
+marianou <- clean(marianou)
+pachecou <- clean(pachecou)
+deleou <- clean(deleou)
+bakeru <- clean(bakeru)
+walshu <- clean(walshu)
+healeyu <- clean(healeyu)
+politou <- clean(politou)
+mcdonaldu <- clean(mcdonaldu)
+rosenbergu <- clean(rosenbergu)
+cusacku <- clean(cusacku)
+
+library(stringi)
+
+# how much did the given politician spend on the given type of expense?
+catpolsum <- function(politician, category) {
+  cat <- politician[grepl(category, politician$Category, fixed=TRUE),c("Amount")]
+  return(sum(cat))
+}
+
+catpolsum(marianou, "Flight")
+
+# how much did all of the politicians spend on the given type of expense?
+catsum <- function(category) {
+  toReturn <- sum(catpolsum(pachecou, category), catpolsum(walshu, category), catpolsum(healeyu, category), catpolsum(bakeru, category), catpolsum(deleou, category), catpolsum(marianou, category), catpolsum(politou, category), catpolsum(mcdonaldu, category), catpolsum(rosenbergu, category), catpolsum(cusacku, category))
+  return(toReturn)
+}
+
+# total expenses for flights, ground transpo, and lodging
+paste("Flights:", catsum("Flight"))
+paste("Ground Trans:", catsum("Ground Transportation"))
+paste("Lodging", catsum("Lodging"))
+
+# how much did all of the politicians spend on lodging in Boston?
+boston_perc <- function(politician) {
+  lod <- politician[grepl("Lodging", politician$Category, fixed=TRUE),]
+  lodge_total <- sum(lod$Amount)
+  bos <- lod[grepl("Boston", lod$Dcity, fixed=TRUE),c("Amount")]
+  return(sum(bos)/lodge_total)
+}
+```
+
+```{r}
+# create a data frame of only the politician name, amount spent, and expense type for each travel expenditure with the given dataset for a politician
+# makes it easier to aggregate and use in Tableau
+pca <- function(pol_df, pol_name) {
+  result <- data.frame(pol_name, pol_df$Amount, pol_df$Category)
+  return(result)
+}
+
+# create a dataframe with politician name, amount spent, and expense type for travel expenditures with all of the politicians included
+all_pols_pca <- rbind(pca(healeyu, "Att. Gen. Maura Healey"), pca(walshu, "Mayor Marty Walsh"), pca(pachecou, "Sen. Marc Pacheco"), pca(bakeru, "Gov. Charlie Baker"), pca(deleou, "Rep. Robert DeLeo"), pca(marianou, "Rep. Ronald Mariano"), pca(mcdonaldu, "Ct. Sheriff Joseph McDonald"), pca(politou, "Lt. Gov. Karyn Polito"), pca(rosenbergu, "Sen. Stan Rosenberg"), pca(cusacku, "Rep. Mark Cusack"))
+write.csv(all_pols_pca, "/Users/vikaba/Downloads/all_pols_pca.csv")
+```
+
+```{r}
+# create a data frame of politician name, amount spent, type of expense, and location of expense with the given dataset for a politician
+pca_city <- function(pol_df, pol_name) {
+  result <- data.frame(pol_name, pol_df$Amount, pol_df$Category, pol_df$Dcity)
+  return(result)
+}
+
+# create a dataframe with politician name, amount spent, expense type, and expense location for travel expenditures with all of the politicians included
+all_pols_pca_city <- rbind(pca_city(healeyu, "Maura Healey"), pca_city(walshu, "Marty Walsh"), pca_city(pachecou, "Marc Pacheco"), pca_city(bakeru, "Charlie Baker"), pca_city(deleou, "Robert DeLeo"), pca_city(marianou, "Ronald Mariano"), pca_city(mcdonaldu, "Joseph McDonald"), pca_city(politou, "Karyn Polito"), pca_city(rosenbergu, "Stan Rosenberg"), pca_city(cusacku, "Mark Cusack"))
+
+# extract only the lodging expenses
+lod <- all_pols_pca_city[grepl("Lodging", all_pols_pca_city$pol_df.Category, fixed=TRUE),]
+
+# total spent on lodging by all politicians
+lodge_total <- sum(lod$pol_df.Amount)
+
+# extract only lodging expenses that were done in Boston
+bos <- lod[grepl("Boston", lod$pol_df.Dcity, fixed=TRUE),c("pol_df.Amount")]
+
+# percent of lodging that was done in Boston
+sum(bos)/lodge_total
+
+```
+
+
